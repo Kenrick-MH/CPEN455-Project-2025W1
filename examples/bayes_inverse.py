@@ -38,7 +38,6 @@ def get_seq_log_prob(prompts, tokenizer, model, device):
     encoded_batch = tokenizer.encode(
         prompts, return_tensors="pt", return_attention_mask=True
     )
-    
     input_ids = encoded_batch["input_ids"].to(device)
     attention_mask = encoded_batch["attention_mask"].to(device)
 
@@ -62,6 +61,46 @@ METHOD_SET = ["zero_shot", "naive_prompting", "full_finetune"]
 def is_required_training(method: str) -> bool:
     assert method in METHOD_SET, f"Method {method} not recognized. Choose from {METHOD_SET}."
     return method in METHOD_SET[2:]
+
+
+def cross_entropy_test(args, model, tokenizer, batch, optimizer=None, is_training=True):
+    if is_training:
+        model.train()
+    else:
+        model.eval()
+
+    _, subjects, messages, label_indexs = batch
+    
+    if -1 in label_indexs:
+        bpd = None
+    else:
+
+        spam_prompts = [get_prompt(subject=subj, message=msg, label=ENRON_LABEL_INDEX_MAP.inv[0], max_seq_length=args.max_seq_len) for subj, msg, label in zip(subjects, messages, labels_text)]
+        ham_prompts = [get_prompt(subject=subj, message=msg, label=ENRON_LABEL_INDEX_MAP.inv[1], max_seq_length=args.max_seq_len) for subj, msg, label in zip(subjects, messages, labels_text)]
+
+        # shape: 1xd for both spam and ham
+        spam_seq_log_prob = get_seq_log_prob(spam_prompts, tokenizer, model, device=device)
+        ham_seq_log_prob = get_seq_log_prob(ham_prompts, tokenizer, model, device=device)
+    
+        # Now, get the posterior probabilities for predicting spam and ham
+        softmax_logits = torch.hstack(spam_seq_log_prob, ham_seq_log_prob)
+        ce_loss = torch.nn.CrossEntropyLoss()
+        loss_val = ce_loss(softmax_logits, label_indexs)
+        
+        if is_training:
+            assert optimizer is not None, "Optimizer must be provided during training."
+            optimizer.zero_grad()
+            loss_val.backward()
+            optimizer.step()
+
+    is_correct, (probs, labels_pred) = bayes_inverse_llm_classifier(args, model, batch, tokenizer, device=device)
+
+    return loss_val, is_correct, (probs, labels_pred)
+
+
+
+
+
 
 def bayes_inverse_llm_classifier(args, model, batch, tokenizer, device):
 
@@ -112,7 +151,9 @@ def train_or_test(args, model, tokenizer, batch, optimizer=None, is_training=Tru
         prompts = [get_prompt(subject=subj, message=msg, label=label, max_seq_length=args.max_seq_len) for subj, msg, label in zip(subjects, messages, labels_text)]
 
         seq_log_prob = get_seq_log_prob(prompts, tokenizer, model, device=device)
-        
+    
+        # is_correct, (probs, labels_pred) = bayes_inverse_llm_classifier(args, model, batch, tokenizer, device=device)
+            
         num_characters = torch.tensor([len(prompt) for prompt in prompts], device=device).sum()
         bpd = -seq_log_prob.sum()/num_characters
 
@@ -136,7 +177,6 @@ def save_probs(args, model, tokenizer, dataloader, device, name = "test"):
         for batch in tqdm(dataloader, desc="saving probabilities"):
             
             _, (probs, _) = bayes_inverse_llm_classifier(args, model, batch, tokenizer, device = device)
-            
             data_index, _, _, _ = batch
             indices = torch.as_tensor(data_index).view(-1).tolist()
             
@@ -228,7 +268,7 @@ if __name__ == "__main__":
         os.makedirs(args.prob_output_folder)
 
     for iteration in tqdm(range(args.num_iterations), desc="Training"):
-                    
+        # Evaluate Validation Loss per 10 steaps
         if (iteration + 1) % 10 == 0:
             val_acc_logger = avg_acc_logger()
             val_bpd_logger = avg_logger()
@@ -257,6 +297,7 @@ if __name__ == "__main__":
                     
         batch = next(iter(training_dataloader))
         
+        # Train on this batch
         bpd, is_correct, _ = train_or_test(
             args = args, 
             model = model, 

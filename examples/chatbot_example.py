@@ -46,7 +46,12 @@ if __name__ == "__main__":
     model.eval()
 
     messages = [
-        {"role": "user", "content": "What is gravity?"}
+        {"role": "system", "content": '''
+            Classify the following message as 'spam' or 'not_spam'.
+            
+            Spam includes unwanted, irrelevant, deceptive, promotional, malicious, or mass-distributed messages such as phishing, scams, unsolicited ads, bulk marketing, fake offers, malware links, or messages trying to obtain sensitive information.
+        '''},
+        {"role": "user", "content": ""}
     ]
 
     input_text = tokenizer.apply_chat_template(messages, tokenize=False)
