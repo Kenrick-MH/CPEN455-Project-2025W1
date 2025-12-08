@@ -28,6 +28,7 @@ class LlamaConfig:
     - num_hidden_layers: Number of transformer decoder layers
     - num_attention_heads: Number of attention heads for queries
     - num_key_value_heads: Number of key-value heads (for Grouped Query Attention)
+    - dropout_rate: rate of dropout in the MLP layers.
     
     Position Encoding:
     -----------------
@@ -70,6 +71,7 @@ class LlamaConfig:
     
     def __init__(
         self,
+        dropout_rate=0,
         vocab_size=32000,
         hidden_size=4096,
         intermediate_size=11008,
@@ -123,6 +125,7 @@ class LlamaConfig:
             **kwargs: Additional arguments (for extensibility)
         """
         self.vocab_size = vocab_size
+        self.dropout_rate = dropout_rate
         self.max_position_embeddings = max_position_embeddings
         self.hidden_size = hidden_size
         self.intermediate_size = intermediate_size

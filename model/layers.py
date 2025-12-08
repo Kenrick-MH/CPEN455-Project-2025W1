@@ -13,6 +13,7 @@ Usage:
 
 import torch
 from torch import nn
+from torch.nn import Dropout
 from typing import Optional
 from .attention import LlamaAttention
 from .mlp import LlamaMLP
@@ -88,6 +89,7 @@ class LlamaDecoderLayer(nn.Module):
         """
         super().__init__()
         self.hidden_size = config.hidden_size
+        self.dropout_rate = config.dropout_rate
 
         # Self-attention mechanism
         self.self_attn = LlamaAttention(config=config, layer_idx=layer_idx)
@@ -98,6 +100,7 @@ class LlamaDecoderLayer(nn.Module):
         # Layer normalization (RMSNorm) for attention and MLP
         self.input_layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.post_attention_layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.dropout_layer = Dropout(p=self.dropout_rate)
 
     def forward(
         self,
@@ -155,7 +158,13 @@ class LlamaDecoderLayer(nn.Module):
         # Pre-norm: Normalize before MLP
         hidden_states = self.post_attention_layernorm(hidden_states)
         hidden_states = self.mlp(hidden_states)
+        
+        # Drop out some of the MLP connections to prevent overfitting
+        hidden_states = self.dropout_layer(hidden_states)
+        
         # Add residual connection
         hidden_states = residual + hidden_states
+
+        
         
         return hidden_states

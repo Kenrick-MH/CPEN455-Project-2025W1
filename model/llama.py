@@ -91,7 +91,7 @@ class LlamaModel(nn.Module):
         self.rotary_emb = LlamaRotaryEmbedding(config=config)
         
         # Gradient checkpointing (for memory efficiency during training)
-        self.gradient_checkpointing = False
+        self.gradient_checkpointing = True
 
     def forward(
         self,

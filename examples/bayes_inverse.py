@@ -201,7 +201,7 @@ if __name__ == "__main__":
     
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--max_seq_len", type=int, default=256)
-    parser.add_argument("--dataset_path", type=str, default="autograder/cpen455_released_datasets/train_val_subset.csv")
+    parser.add_argument("--dataset_path", type=str, default="autograder/cpen455_released_datasets/merged.csv")
     parser.add_argument("--test_dataset_path", type=str, default="autograder/cpen455_released_datasets/test_subset.csv")
     parser.add_argument("--prob_output_folder", type=str, default="bayes_inverse_probs")
     parser.add_argument("--user_prompt", type=str, default="")
@@ -232,6 +232,7 @@ if __name__ == "__main__":
 
     # Set device to GPU if available, to MPS if on Mac with M-series chip, else CPU
     device = set_device()
+    # device = "cpu"
 
     # Load tokenizer and config
     tokenizer = Tokenizer.from_pretrained(checkpoint, cache_dir=model_cache_dir)
@@ -241,7 +242,7 @@ if __name__ == "__main__":
 
     # Load model
     model = LlamaModel(config)
-    load_model_weights(model, checkpoint, cache_dir=model_cache_dir, device=device)
+    load_model_weigConhts(model, checkpoint, cache_dir=model_cache_dir, device=device)
     model = model.to(device)
 
     # Set up datasets and dataloaders
