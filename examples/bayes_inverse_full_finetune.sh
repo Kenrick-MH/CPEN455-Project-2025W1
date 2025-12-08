@@ -2,5 +2,5 @@
 uv run -m examples.bayes_inverse \
 --method full_finetune \
 --max_seq_len 256 \
---batch_size 8 \
+--batch_size 4 \
 --num_iterations 80

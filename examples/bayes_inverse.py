@@ -72,37 +72,42 @@ def cross_entropy_test(args, model, tokenizer, batch, optimizer=None, is_trainin
     _, subjects, messages, label_indexs = batch
     
     if -1 in label_indexs:
-        bpd = None
+        loss_val = None
     else:
 
-        spam_prompts = [get_prompt(subject=subj, message=msg, label=ENRON_LABEL_INDEX_MAP.inv[0], max_seq_length=args.max_seq_len) for subj, msg, label in zip(subjects, messages, labels_text)]
-        ham_prompts = [get_prompt(subject=subj, message=msg, label=ENRON_LABEL_INDEX_MAP.inv[1], max_seq_length=args.max_seq_len) for subj, msg, label in zip(subjects, messages, labels_text)]
+        with torch.no_grad():
+            spam_prompts = [get_prompt(subject=subj, message=msg, label=ENRON_LABEL_INDEX_MAP.inv[0], max_seq_length=args.max_seq_len) for subj, msg in zip(subjects, messages)]
+            ham_prompts = [get_prompt(subject=subj, message=msg, label=ENRON_LABEL_INDEX_MAP.inv[1], max_seq_length=args.max_seq_len) for subj, msg in zip(subjects, messages)]
 
         # shape: 1xd for both spam and ham
         spam_seq_log_prob = get_seq_log_prob(spam_prompts, tokenizer, model, device=device)
         ham_seq_log_prob = get_seq_log_prob(ham_prompts, tokenizer, model, device=device)
     
         # Now, get the posterior probabilities for predicting spam and ham
-        softmax_logits = torch.hstack(spam_seq_log_prob, ham_seq_log_prob)
+        softmax_logits = torch.stack((spam_seq_log_prob, ham_seq_log_prob), dim=1)
+
+        # pdb.set_trace()
         ce_loss = torch.nn.CrossEntropyLoss()
-        loss_val = ce_loss(softmax_logits, label_indexs)
+        loss_val = ce_loss(softmax_logits, label_indexs.to(device))
         
         if is_training:
             assert optimizer is not None, "Optimizer must be provided during training."
             optimizer.zero_grad()
             loss_val.backward()
             optimizer.step()
+            
+        # Get prediction labels
+        labels_pred = torch.argmax(softmax_logits, dim=-1)
+        is_correct = labels_pred.cpu() == label_indexs
+        
 
-    is_correct, (probs, labels_pred) = bayes_inverse_llm_classifier(args, model, batch, tokenizer, device=device)
+    # is_correct, (probs, labels_pred) = bayes_inverse_llm_classifier(args, model, batch, tokenizer, device=device)
 
-    return loss_val, is_correct, (probs, labels_pred)
-
-
-
-
+    return loss_val, is_correct, (softmax_logits.detach().cpu(), labels_pred.detach().cpu())
 
 
 def bayes_inverse_llm_classifier(args, model, batch, tokenizer, device):
+    
 
     _, subjects, messages, labels = batch
 
@@ -271,12 +276,19 @@ if __name__ == "__main__":
         # Evaluate Validation Loss per 10 steaps
         if (iteration + 1) % 10 == 0:
             val_acc_logger = avg_acc_logger()
-            val_bpd_logger = avg_logger()
+            val_loss_logger = avg_logger()
             
             with torch.no_grad():
                 for batch in tqdm(val_dataloader, desc="Evaluating on validation set during training"):
                     
-                    bpd, is_correct, (probs, labels_pred) = train_or_test(
+                    # bpd, is_correct, (probs, labels_pred) = train_or_test(
+                    #     args = args, 
+                    #     model = model, 
+                    #     tokenizer = tokenizer, 
+                    #     batch = batch, 
+                    #     is_training=False)
+                    
+                    loss_val, is_correct, (probs, labels_pred) = cross_entropy_test(
                         args = args, 
                         model = model, 
                         tokenizer = tokenizer, 
@@ -284,10 +296,10 @@ if __name__ == "__main__":
                         is_training=False)
                     
                     val_acc_logger.update(is_correct)
-                    val_bpd_logger.update(bpd.item())
+                    val_loss_logger.update(loss_val.item())
 
                     wandb.log({
-                        "val_avg_bpd": val_bpd_logger.compute_average(),
+                        "val_avg_bpd": val_loss_logger.compute_average(),
                         "val_avg_accuracy": val_acc_logger.compute_accuracy(),
                         "training_iteration": iteration,
                         })
@@ -298,16 +310,16 @@ if __name__ == "__main__":
         batch = next(iter(training_dataloader))
         
         # Train on this batch
-        bpd, is_correct, _ = train_or_test(
+        loss_val, is_correct, _ = cross_entropy_test(
             args = args, 
             model = model, 
             tokenizer = tokenizer, 
+            optimizer= optimizer,
             batch = batch, 
-            optimizer = optimizer,
-            is_training = True)
+            is_training=True)
         
         wandb.log({
-            "training_batch_bpd": bpd.item(),
+            "training_batch_bpd": loss_val.item(),
             "training_batch_acc": is_correct.float().mean().item(),
             "training_iteration": iteration,
             })
