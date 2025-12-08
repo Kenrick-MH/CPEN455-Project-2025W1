@@ -80,15 +80,15 @@ def cross_entropy_test(args, model, tokenizer, batch, optimizer=None, is_trainin
             ham_prompts = [get_prompt(subject=subj, message=msg, label=ENRON_LABEL_INDEX_MAP.inv[1], max_seq_length=args.max_seq_len) for subj, msg in zip(subjects, messages)]
 
         # shape: 1xd for both spam and ham
-        spam_seq_log_prob = get_seq_log_prob(spam_prompts, tokenizer, model, device=device)
-        ham_seq_log_prob = get_seq_log_prob(ham_prompts, tokenizer, model, device=device)
+        spam_seq_log_prob = get_seq_log_prob(spam_prompts, tokenizer, model, device=device).cpu()
+        ham_seq_log_prob = get_seq_log_prob(ham_prompts, tokenizer, model, device=device).cpu()
     
         # Now, get the posterior probabilities for predicting spam and ham
         softmax_logits = torch.stack((spam_seq_log_prob, ham_seq_log_prob), dim=1)
 
         # pdb.set_trace()
         ce_loss = torch.nn.CrossEntropyLoss()
-        loss_val = ce_loss(softmax_logits, label_indexs.to(device))
+        loss_val = ce_loss(softmax_logits, label_indexs)
         
         if is_training:
             assert optimizer is not None, "Optimizer must be provided during training."
@@ -98,7 +98,7 @@ def cross_entropy_test(args, model, tokenizer, batch, optimizer=None, is_trainin
             
         # Get prediction labels
         labels_pred = torch.argmax(softmax_logits, dim=-1)
-        is_correct = labels_pred.cpu() == label_indexs
+        is_correct = labels_pred == label_indexs
         
 
     # is_correct, (probs, labels_pred) = bayes_inverse_llm_classifier(args, model, batch, tokenizer, device=device)
