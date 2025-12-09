@@ -252,7 +252,7 @@ if __name__ == "__main__":
     
     load_model_weights(base_model, checkpoint, cache_dir=model_cache_dir, device=device)
     model = PrefixLlamaModel(base_model, 64)
-    model = base_model
+    # model = base_model
     model = model.to(device)
     
     # Set up datasets and dataloaders
