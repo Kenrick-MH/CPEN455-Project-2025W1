@@ -260,7 +260,7 @@ if __name__ == "__main__":
     train_n_val_dataset = Enron1Dataset(csv_path=args.dataset_path)
     # training_dataset, val_dataset = prepare_subset(train_n_val_dataset, int(0.8 * len(train_n_val_dataset)), ratio_spam=0.5, return_remaining=True)
     training_dataset, val_dataset = train_n_val_dataset.prepare_subsets(int(0.8 * len(train_n_val_dataset)), ratio_spam=0.5, return_remaining=True)
-    # test_dataset = CPEN455_2025_W1_Dataset(csv_path=args.test_dataset_path)
+    test_dataset = CPEN455_2025_W1_Dataset(csv_path=args.test_dataset_path)
 
     print(f"Training len {len(training_dataset)} Val len {len(val_dataset)}")
 
@@ -277,11 +277,11 @@ if __name__ == "__main__":
         shuffle=False
         )
     
-    # test_dataloader = DataLoader(
-    #     test_dataset, 
-    #     batch_size=args.batch_size, 
-    #     shuffle=False
-    #     )
+    test_dataloader = DataLoader(
+        test_dataset, 
+        batch_size=args.batch_size, 
+        shuffle=False
+        )
     
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-5)
     
@@ -347,4 +347,4 @@ if __name__ == "__main__":
     #     shuffle=False
     #     )
     # save_probs(args, model, tokenizer, train_n_val_dataloader, device=device, name = "train_n_val")
-    # save_probs(args, model, tokenizer, test_dataloader, device=device, name = "test")
+    save_probs(args, model, tokenizer, test_dataloader, device=device, name = "test")
