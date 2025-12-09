@@ -5,10 +5,21 @@ PROMPT_TEMPLATE = (
     "Message: {message}"
 )
 
+
+# For the other dataset format
+PROMPT_TEMPLATE2 = (
+    "The following email is labelled as {label}.\n"
+    "{message}"
+)
+
 def get_prompt(subject: str, message: str, label: str, max_seq_length: int = 256, user_prompt: str = "") -> str:
     prompt = PROMPT_TEMPLATE.format(user_prompt=user_prompt, subject=subject, message=message, label=label)
     prompt = prompt[:max_seq_length]
     return prompt
+
+def get_prompt2(message:str, label: str, max_seq_length: int = 256) -> str:
+    prompt = PROMPT_TEMPLATE2.format(label=label, message=message)
+    return prompt[:max_seq_length]
 
 if __name__ == "__main__":
 

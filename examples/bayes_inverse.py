@@ -24,6 +24,8 @@ from torch.utils.data import DataLoader
 from torch.nn import functional as F
 
 
+from model.prefix_llama import PrefixLlamaModel
+from autograder.dataset import Enron1Dataset
 from autograder.dataset import CPEN455_2025_W1_Dataset, ENRON_LABEL_INDEX_MAP, prepare_subset
 from model import LlamaModel
 from utils.weight_utils import load_model_weights
@@ -31,7 +33,7 @@ from model.config import Config
 from model.tokenizer import Tokenizer
 from utils.download import _resolve_snapshot_path
 from utils.device import set_device
-from utils.prompt_template import get_prompt
+from utils.prompt_template import get_prompt, get_prompt2
 from utils.logger import avg_logger, avg_acc_logger
     
 def get_seq_log_prob(prompts, tokenizer, model, device):
@@ -69,15 +71,18 @@ def cross_entropy_test(args, model, tokenizer, batch, optimizer=None, is_trainin
     else:
         model.eval()
 
-    _, subjects, messages, label_indexs = batch
+    # _, subjects, messages, label_indexs = batch
+    _, msgs, label_indexs = batch
     
     if -1 in label_indexs:
         loss_val = None
     else:
 
         with torch.no_grad():
-            spam_prompts = [get_prompt(subject=subj, message=msg, label=ENRON_LABEL_INDEX_MAP.inv[0], max_seq_length=args.max_seq_len) for subj, msg in zip(subjects, messages)]
-            ham_prompts = [get_prompt(subject=subj, message=msg, label=ENRON_LABEL_INDEX_MAP.inv[1], max_seq_length=args.max_seq_len) for subj, msg in zip(subjects, messages)]
+            # spam_prompts = [get_prompt(subject=subj, message=msg, label=ENRON_LABEL_INDEX_MAP.inv[0], max_seq_length=args.max_seq_len) for subj, msg in zip(subjects, messages)]
+            # ham_prompts = [get_prompt(subject=subj, message=msg, label=ENRON_LABEL_INDEX_MAP.inv[1], max_seq_length=args.max_seq_len) for subj, msg in zip(subjects, messages)]
+            spam_prompts = [get_prompt2(message=msg, label=ENRON_LABEL_INDEX_MAP.inv[0], max_seq_length=args.max_seq_len) for msg in msgs]
+            ham_prompts = [get_prompt2(message=msg, label=ENRON_LABEL_INDEX_MAP.inv[1], max_seq_length=args.max_seq_len) for msg in msgs]
 
         # shape: 1xd for both spam and ham
         spam_seq_log_prob = get_seq_log_prob(spam_prompts, tokenizer, model, device=device).cpu()
@@ -146,7 +151,9 @@ def train_or_test(args, model, tokenizer, batch, optimizer=None, is_training=Tru
     else:
         model.eval()
 
-    _, subjects, messages, label_indexs = batch
+    # _, subjects, messages, label_indexs = batch
+    
+    
     
     if -1 in label_indexs:
         bpd = None
@@ -201,7 +208,7 @@ if __name__ == "__main__":
     
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--max_seq_len", type=int, default=256)
-    parser.add_argument("--dataset_path", type=str, default="autograder/cpen455_released_datasets/train_val_subset.csv")
+    parser.add_argument("--dataset_path", type=str, default="autograder/cpen455_released_datasets/spam_ham_dataset.csv")
     parser.add_argument("--test_dataset_path", type=str, default="autograder/cpen455_released_datasets/test_subset.csv")
     parser.add_argument("--prob_output_folder", type=str, default="bayes_inverse_probs")
     parser.add_argument("--user_prompt", type=str, default="")
@@ -240,14 +247,23 @@ if __name__ == "__main__":
     config = Config._find_config_files(base_path)
 
     # Load model
-    model = LlamaModel(config)
-    load_model_weights(model, checkpoint, cache_dir=model_cache_dir, device=device)
+    base_model = LlamaModel(config)
+    # load_model_weights(model, checkpoint, cache_dir=model_cache_dir, device=device)
+    
+    load_model_weights(base_model, checkpoint, cache_dir=model_cache_dir, device=device)
+    # model = PrefixLlamaModel(base_model, 256)
+    model = base_model
     model = model.to(device)
-
+    
     # Set up datasets and dataloaders
-    train_n_val_dataset = CPEN455_2025_W1_Dataset(csv_path=args.dataset_path)
-    training_dataset, val_dataset = prepare_subset(train_n_val_dataset, int(0.8 * len(train_n_val_dataset)), ratio_spam=0.5, return_remaining=True)
-    test_dataset = CPEN455_2025_W1_Dataset(csv_path=args.test_dataset_path)
+    # train_n_val_dataset = CPEN455_2025_W1_Dataset(csv_path=args.dataset_path)
+    train_n_val_dataset = Enron1Dataset(csv_path=args.dataset_path)
+    # training_dataset, val_dataset = prepare_subset(train_n_val_dataset, int(0.8 * len(train_n_val_dataset)), ratio_spam=0.5, return_remaining=True)
+    training_dataset, val_dataset = train_n_val_dataset.prepare_subsets(int(0.8 * len(train_n_val_dataset)), ratio_spam=0.5, return_remaining=True)
+    # test_dataset = CPEN455_2025_W1_Dataset(csv_path=args.test_dataset_path)
+
+    print(f"Training len {len(training_dataset)} Val len {len(val_dataset)}")
+
 
     training_dataloader = DataLoader(
         training_dataset, 
@@ -261,11 +277,11 @@ if __name__ == "__main__":
         shuffle=False
         )
     
-    test_dataloader = DataLoader(
-        test_dataset, 
-        batch_size=args.batch_size, 
-        shuffle=False
-        )
+    # test_dataloader = DataLoader(
+    #     test_dataset, 
+    #     batch_size=args.batch_size, 
+    #     shuffle=False
+    #     )
     
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-5)
     
@@ -325,10 +341,10 @@ if __name__ == "__main__":
             })
 
     # After training, save probabilities on test set
-    train_n_val_dataloader = DataLoader(
-        train_n_val_dataset, 
-        batch_size=args.batch_size, 
-        shuffle=False
-        )
-    save_probs(args, model, tokenizer, train_n_val_dataloader, device=device, name = "train_n_val")
-    save_probs(args, model, tokenizer, test_dataloader, device=device, name = "test")
+    # train_n_val_dataloader = DataLoader(
+    #     train_n_val_dataset, 
+    #     batch_size=args.batch_size, 
+    #     shuffle=False
+    #     )
+    # save_probs(args, model, tokenizer, train_n_val_dataloader, device=device, name = "train_n_val")
+    # save_probs(args, model, tokenizer, test_dataloader, device=device, name = "test")
