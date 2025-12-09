@@ -25,7 +25,7 @@ from torch.nn import functional as F
 
 
 from model.prefix_llama import PrefixLlamaModel
-from autograder.dataset import Enron1Dataset
+from dataset.enron_dataset import Enron1Dataset
 from autograder.dataset import CPEN455_2025_W1_Dataset, ENRON_LABEL_INDEX_MAP, prepare_subset
 from model import LlamaModel
 from utils.weight_utils import load_model_weights
@@ -208,7 +208,7 @@ if __name__ == "__main__":
     
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--max_seq_len", type=int, default=256)
-    parser.add_argument("--dataset_path", type=str, default="autograder/cpen455_released_datasets/spam_ham_dataset.csv")
+    parser.add_argument("--dataset_path", type=str, default="dataset/datasets_csv/spam_ham_dataset.csv")
     parser.add_argument("--test_dataset_path", type=str, default="autograder/cpen455_released_datasets/test_subset.csv")
     parser.add_argument("--prob_output_folder", type=str, default="bayes_inverse_probs")
     parser.add_argument("--user_prompt", type=str, default="")
