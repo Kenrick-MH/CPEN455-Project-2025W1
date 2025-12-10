@@ -7,11 +7,18 @@ from torch.utils.data import Dataset, Subset
 class Enron1Dataset(Dataset):
     def __init__(
         self,
-        csv_path = None
+        csv_path = None,
+        n_samples = None
     ) -> None:
     
         self._csv_path = csv_path
-        frame = pd.read_csv(csv_path, index_col=0)        
+        frame = pd.read_csv(csv_path, index_col=0)   
+        
+        if n_samples is not None:
+            frame = frame[:n_samples]
+             
+        print(f' Total number of data {len(frame)}')
+             
         frame["text"] = frame["text"].fillna("").astype(str)
         frame["label_num"] = (
             frame["label_num"].fillna("").astype(str).str.strip().str.lower()
@@ -33,18 +40,18 @@ class Enron1Dataset(Dataset):
 
         return data_index, message, label_index
 
-    def prepare_subsets(self, num_training_samples, ratio_spam=0.5, return_remaining=False):
-         # Separate spam and ham samples
+    def prepare_subsets(self, train_ratio=0.8, return_remaining=False):
+        # Separate spam and ham samples
         spam_indices = [i for i, (_, _, label) in enumerate(self) if label == 1]
         ham_indices = [i for i, (_, _, label) in enumerate(self) if label == 0]
 
-        # Ensure equal number of spam and ham samples
-        num_spam = min(int(num_training_samples * ratio_spam), len(spam_indices))
-        num_ham = min(int(num_training_samples * (1-ratio_spam)), len(ham_indices))
         
-        print(len(spam_indices), num_spam)       
-        selected_spam_indices = random.sample(spam_indices, num_spam)
-        selected_ham_indices = random.sample(ham_indices, num_ham)
+        num_spam_train = int(train_ratio * len(spam_indices))
+        num_ham_train = int(train_ratio * len(ham_indices))
+        selected_spam_indices = random.sample(spam_indices, num_spam_train)
+        selected_ham_indices = random.sample(ham_indices, num_ham_train)
+
+        print(f'Train distribution: S {len(selected_spam_indices)} H{len(selected_ham_indices)}')
 
         # Combine and shuffle the selected indices
         selected_indices = selected_spam_indices + selected_ham_indices
