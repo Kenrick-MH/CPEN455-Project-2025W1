@@ -3,7 +3,7 @@ from torch import nn
 from .llama import LlamaModel
 from .cache import DynamicCache, Cache
 from typing import Iterable, List, Optional, Callable
-from attention import LlamaAttention, apply_rotary_pos_emb, eager_attention_forward
+from .attention import LlamaAttention, apply_rotary_pos_emb, eager_attention_forward
 
 class LoraAttention(nn.Module):
     def __init__(self, config, base_attention:LlamaAttention, lora_dim, sigma):
@@ -18,8 +18,8 @@ class LoraAttention(nn.Module):
         self.A_o_proj = nn.Linear(config.num_attention_heads * self.head_dim, lora_dim, bias=False)
 
         # Up projections
-        self.B_v_proj = nn.Linear(config.lora_dim, config.num_attention_heads * self.head_dim, bias=False)
-        self.B_k_proj = nn.Linear(config.lora_dim, config.num_attention_heads * self.head_dim, bias=False)
+        self.B_v_proj = nn.Linear(lora_dim, config.num_key_value_heads * self.head_dim, bias=False)
+        self.B_k_proj = nn.Linear(lora_dim, config.num_key_value_heads * self.head_dim, bias=False)
         self.B_o_proj = nn.Linear(lora_dim, config.hidden_size, bias=False)
         
         nn.init.normal_(self.A_v_proj.weight, sigma)
@@ -70,7 +70,7 @@ class LoraAttention(nn.Module):
 
         value_lora = self.B_v_proj(self.A_v_proj(hidden_states)).view(hidden_shape).transpose(1, 2)
         key_lora =  self.B_k_proj(self.A_k_proj(hidden_states)).view(hidden_shape).transpose(1, 2)
-         
+
         K = key_states + key_lora
         V = value_states + value_lora
 

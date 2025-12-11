@@ -25,6 +25,7 @@ from torch.nn import functional as F
 
 from autograder.dataset import CPEN455_2025_W1_Dataset, ENRON_LABEL_INDEX_MAP, prepare_subset
 from model import LlamaModel
+from model.lora_llama import LoraLlamaModel
 from utils.weight_utils import load_model_weights
 from model.config import Config
 from model.tokenizer import Tokenizer
@@ -32,7 +33,6 @@ from utils.download import _resolve_snapshot_path
 from utils.device import set_device
 from utils.prompt_template import get_prompt
 from utils.logger import avg_logger, avg_acc_logger
-
 
     
 def get_seq_log_prob(prompts, tokenizer, model, device):
@@ -57,7 +57,7 @@ def get_seq_log_prob(prompts, tokenizer, model, device):
     return gathered_log_prob.sum(dim=-1)
 
 
-METHOD_SET = ["zero_shot", "naive_prompting", "full_finetune"]
+METHOD_SET = ["zero_shot", "naive_prompting", "full_finetune", "lora"]
 
 def is_required_training(method: str) -> bool:
     assert method in METHOD_SET, f"Method {method} not recognized. Choose from {METHOD_SET}."
@@ -210,6 +210,8 @@ if __name__ == "__main__":
     # Training hyperparameters
     parser.add_argument("--num_iterations", type=int, default=100)
     parser.add_argument("--learning_rate", type=float, default=1e-5)
+    parser.add_argument("--lora_dim", type=int, default= 16)
+    parser.add_argument("--lora_sigma", type=float, default= 2.0)
     args = parser.parse_args()
 
     load_dotenv()
@@ -241,10 +243,16 @@ if __name__ == "__main__":
     config = Config._find_config_files(base_path)
 
     # Load model
-    model = LlamaModel(config)
-    load_model_weights(model, checkpoint, cache_dir=model_cache_dir, device=device)
-    model = model.to(device)
-
+    base_model = LlamaModel(config)
+    load_model_weights(base_model, checkpoint, cache_dir=model_cache_dir, device=device)
+    
+    if args.method == 'lora':
+        model = LoraLlamaModel(base_model, args.lora_dim, args.lora_sigma)
+    else:
+        model = base_model
+        
+    model = model.to(device)        
+        
     # Set up datasets and dataloaders
     train_n_val_dataset = CPEN455_2025_W1_Dataset(csv_path=args.dataset_path)
     training_dataset, val_dataset = prepare_subset(train_n_val_dataset, int(0.8 * len(train_n_val_dataset)), ratio_spam=0.5, return_remaining=True)
@@ -268,7 +276,7 @@ if __name__ == "__main__":
         shuffle=False
         )
     
-    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-5)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
     
     if os.path.exists(args.prob_output_folder) == False:
         os.makedirs(args.prob_output_folder)
