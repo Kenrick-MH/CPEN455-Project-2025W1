@@ -177,7 +177,7 @@ class LlamaModel(nn.Module):
         # Apply final layer normalization
         hidden_states = self.norm(hidden_states)
 
-        logits = self.lm_head(hidden_states)
-        log_probs = torch.nn.functional.log_softmax(logits, dim=-1)
+        # logits = self.lm_head(hidden_states)
+        # log_probs = torch.nn.functional.log_softmax(logits, dim=-1)
 
-        return log_probs, past_key_values
+        return hidden_states, past_key_values

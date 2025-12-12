@@ -112,7 +112,8 @@ class LoraLlamaModel(nn.Module):
         self.model = base_model
         self.config = base_model.config        
         self.lora_dim = lora_dim
-        
+        self.count_spam = 0
+        self.count_ham = 0
         
         # Freeze model params first
         for param in self.model.parameters():
@@ -128,4 +129,31 @@ class LoraLlamaModel(nn.Module):
     def forward(self, *args, **kwargs):
         self.model.eval()
         return self.model(*args, **kwargs)
+    
+    def save_dict(self):
+        return  {
+            k: v for k, v in self.model.state_dict().items()
+            if v.requires_grad
+        }
         
+class LoRaClassifer(nn.Module):
+    def __init__(self, base_model: LlamaModel) -> None:
+        super().__init__()
+        self.model = base_model
+        self.lin_classifier = nn.Linear(base_model.config.hidden_size, 2)
+        
+    def forward(self, *args, **kwargs):
+        self.model.eval()
+        
+        # Grab last token
+        model_out, past_key = self.model(*args, **kwargs)
+        binary_logits = self.lin_classifier(model_out[:, -1, :]) 
+        
+        return binary_logits, past_key
+    
+    
+    def save_dict(self):
+        return  {
+            k: v for k, v in self.state_dict().items()
+            if v.requires_grad
+        }

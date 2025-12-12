@@ -1,6 +1,6 @@
 PROMPT_TEMPLATE = (
+    "<{label}>.\n"
     "{user_prompt}\n"
-    "The following email is labeled as {label}.\n"
     "Subject: {subject}\n"
     "Message: {message}"
 )
